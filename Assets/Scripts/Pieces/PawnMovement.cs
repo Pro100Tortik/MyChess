@@ -52,10 +52,11 @@ public class PawnMovement : PieceMovement
     {
         if (x < 0 || x >= 8) return;
 
-        //if (gameManager.EnPassantTarget.HasValue &&
-        //    gameManager.EnPassantTarget.Value == new Vector2Int(x, y))
-        //{
-        //    moves.Add(gameManager.EnPassantTarget.Value);
-        //}
+        Vector2Int? enPassantTarget = ChessGameManager.Instance.EnPassantTarget;
+        if (enPassantTarget.HasValue && enPassantTarget.Value == new Vector2Int(x, y))
+        {
+            int direction = piece.Data.Color == PieceColor.White ? 1 : -1;
+            moves.Add(new Vector2Int(x, y + direction));
+        }
     }
 }

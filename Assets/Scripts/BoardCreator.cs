@@ -8,8 +8,8 @@ public class BoardCreator : MonoBehaviour
     [SerializeField] private Transform boardParent;
     [SerializeField] private GridLayoutGroup boardGrid;
 
-    [SerializeField] private Color lightColor = new Color(0.6f, 0.6f, 0.6f, 1f);
-    [SerializeField] private Color darkColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+    [SerializeField] private Color lightColor = new Color(0.65f, 0.65f, 0.65f, 1f);
+    [SerializeField] private Color darkColor = new Color(0.35f, 0.35f, 0.35f, 1f);
 
     [ContextMenu("Update visuals")]
     public void InitializeTiles()

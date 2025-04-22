@@ -1,24 +1,32 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
-public class Tile : MonoBehaviour
+[RequireComponent(typeof(Image))]
+public class Tile : MonoBehaviour, IPointerClickHandler
 {
     public Vector2Int BoardPosition { get; private set; }
     public Piece CurrentPiece { get; set; }
 
-    [SerializeField] private Image tileImage;
-    [SerializeField] private Color defaultColor;
-    [SerializeField] private Color moveColor = Color.green;
-    [SerializeField] private Color dangerColor = Color.red;
+    [SerializeField] private Image _tileImage;
+    [SerializeField] private Color _defaultColor;
+    [SerializeField] private Color _moveColor = Color.green;
+    [SerializeField] private Color _dangerColor = Color.red;
 
     public void Initialize(Vector2Int position, Color color)
     {
         BoardPosition = position;
-        defaultColor = color;
+        _defaultColor = color;
         ResetColor();
     }
 
-    public void HighlightAsMove() => tileImage.color = moveColor;
-    public void HighlightAsDanger() => tileImage.color = dangerColor;
-    public void ResetColor() => tileImage.color = defaultColor;
+    // Обработка клика на клетку
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        ChessGameManager.Instance.OnTileClicked(this);
+    }
+
+    public void HighlightAsMove() => _tileImage.color = _moveColor;
+    public void HighlightAsDanger() => _tileImage.color = _dangerColor;
+    public void ResetColor() => _tileImage.color = _defaultColor;
 }

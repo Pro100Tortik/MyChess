@@ -74,4 +74,35 @@ public abstract class PieceMovement : MonoBehaviour
 
         return result;
     }
+
+    protected List<Vector2Int> FilterMovesForKingSafety(List<Vector2Int> moves)
+    {
+        List<Vector2Int> safeMoves = new List<Vector2Int>();
+        foreach (var move in moves)
+        {
+            // Симулируем ход
+            Piece capturedPiece = null;
+            Tile targetTile = gameManager.Board.Tiles[move.x, move.y];
+            if (targetTile.CurrentPiece != null)
+            {
+                capturedPiece = targetTile.CurrentPiece;
+                targetTile.CurrentPiece = null;
+            }
+
+            Vector2Int originalPos = piece.Data.BoardPosition;
+            piece.Data.BoardPosition = move;
+
+            // Проверяем, остался ли король под шахом
+            bool isKingSafe = !gameManager.IsKingInCheck(piece.Data.Color);
+            if (isKingSafe) safeMoves.Add(move);
+
+            // Отменяем симуляцию
+            piece.Data.BoardPosition = originalPos;
+            if (capturedPiece != null)
+            {
+                targetTile.CurrentPiece = capturedPiece;
+            }
+        }
+        return safeMoves;
+    }
 }

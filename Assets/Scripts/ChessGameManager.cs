@@ -49,6 +49,21 @@ public class ChessGameManager : MonoBehaviour
         }
     }
 
+    public void OnTileClicked(Tile tile)
+    {
+        if (SelectedPiece == null)
+        {
+            // Выбор фигуры, если кликнули на свою
+            if (tile.CurrentPiece != null && tile.CurrentPiece.Data.Color == CurrentTurn)
+            {
+                SelectPiece(tile.CurrentPiece);
+            }
+            return;
+        }
+
+        TryMakeMove(tile);
+    }
+
     public void TryMakeMove(Tile targetTile)
     {
         if (SelectedPiece == null) return;
@@ -64,21 +79,120 @@ public class ChessGameManager : MonoBehaviour
         DeselectPiece();
     }
 
+    public Vector2Int? EnPassantTarget { get; private set; }
+
     private void MakeMove(Piece piece, Tile targetTile)
     {
-        // Взятие фигуры
+        // Удаление фигуры противника
         if (targetTile.CurrentPiece != null)
         {
             Destroy(targetTile.CurrentPiece.gameObject);
         }
 
-        // Обновляем позиции
+        // Перемещение без рекурсии
         piece.CurrentTile.CurrentPiece = null;
-        piece.MoveTo(targetTile);
+        piece.MoveTo(targetTile);  // MoveTo не должен вызывать TryMakeMove
         targetTile.CurrentPiece = piece;
 
-        // Меняем очередь хода
+        // Смена хода
         CurrentTurn = CurrentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+    }
+
+    private void CheckGameState()
+    {
+        bool isCheck = IsKingInCheck(CurrentTurn);
+        bool hasLegalMoves = HasLegalMoves(CurrentTurn);
+
+        if (isCheck && !hasLegalMoves)
+        {
+
+        }
+        else if (!hasLegalMoves)
+        {
+            Debug.Log("Пат! Ничья");
+        }
+        else if (isCheck)
+        {
+            Debug.Log("Шах!");
+        }
+    }
+
+    public bool IsKingInCheck(PieceColor color)
+    {
+        // Найти короля
+        Vector2Int kingPos = FindKingPosition(color);
+
+        // Проверить, атакован ли он
+        foreach (var tile in Board.Tiles)
+        {
+            if (tile.CurrentPiece != null && tile.CurrentPiece.Data.Color != color)
+            {
+                var moves = tile.CurrentPiece.GetPossibleMoves();
+                if (moves.Contains(kingPos)) return true;
+            }
+        }
+        return false;
+    }
+
+    public bool HasLegalMoves(PieceColor color)
+    {
+        // Проверяем все фигуры текущего игрока
+        for (int x = 0; x < 8; x++)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                Piece piece = Board.Tiles[x, y].CurrentPiece;
+                if (piece != null && piece.Data.Color == color)
+                {
+                    List<Vector2Int> moves = piece.GetPossibleMoves();
+
+                    // Фильтруем ходы, которые не оставляют короля под шахом
+                    foreach (var move in moves)
+                    {
+                        // Симулируем ход
+                        Tile targetTile = Board.Tiles[move.x, move.y];
+                        Piece capturedPiece = targetTile.CurrentPiece;
+
+                        targetTile.CurrentPiece = piece;
+                        piece.CurrentTile.CurrentPiece = null;
+                        Vector2Int originalPos = piece.Data.BoardPosition;
+                        piece.Data.BoardPosition = move;
+
+                        // Проверяем, остался ли король под шахом
+                        bool isKingSafe = !IsKingInCheck(color);
+
+                        // Отменяем симуляцию
+                        piece.Data.BoardPosition = originalPos;
+                        piece.CurrentTile.CurrentPiece = piece;
+                        targetTile.CurrentPiece = capturedPiece;
+
+                        if (isKingSafe)
+                        {
+                            return true; // Нашли хотя бы один допустимый ход
+                        }
+                    }
+                }
+            }
+        }
+        return false; // Нет допустимых ходов
+    }
+
+    public Vector2Int FindKingPosition(PieceColor color)
+    {
+        for (int x = 0; x < 8; x++)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                Piece piece = Board.Tiles[x, y].CurrentPiece;
+                if (piece != null &&
+                    piece.Data.Type == PieceType.King &&
+                    piece.Data.Color == color)
+                {
+                    return new Vector2Int(x, y);
+                }
+            }
+        }
+        return Vector2Int.zero;
     }
 
     private bool IsValidMove(Piece piece, Tile targetTile)

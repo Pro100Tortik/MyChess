@@ -8,6 +8,7 @@ public class KingMovement : PieceMovement
         List<Vector2Int> moves = new List<Vector2Int>();
         Vector2Int currentPos = piece.Data.BoardPosition;
 
+        // Обычные ходы короля
         for (int x = -1; x <= 1; x++)
         {
             for (int y = -1; y <= 1; y++)
@@ -19,12 +20,13 @@ public class KingMovement : PieceMovement
             }
         }
 
-        //if (checkKingSafety && !gameManager.IsKingInCheck(piece.Data.Color))
-        //{
-        //    AddCastlingMoves(moves, currentPos);
-        //}
+        // Рокировка (только если король не под шахом)
+        if (checkKingSafety && !ChessGameManager.Instance.IsKingInCheck(piece.Data.Color))
+        {
+            AddCastlingMoves(moves, currentPos);
+        }
 
-        return moves;
+        return FilterValidMoves(moves);
     }
 
     private void AddCastlingMoves(List<Vector2Int> moves, Vector2Int currentPos)
