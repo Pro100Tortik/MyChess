@@ -4,10 +4,15 @@ using System.Collections.Generic;
 public class ChessGameManager : MonoBehaviour
 {
     public static ChessGameManager Instance { get; private set; }
+    public Vector2Int? EnPassantTarget { get; private set; }
+    public Transform PieceParent => pieceParent;
 
     [Header("References")]
+    [SerializeField] private AIPlayer ai;
+    [SerializeField] private Transform pieceParent;
     [SerializeField] private BoardCreator boardCreator;
     [SerializeField] private PieceSpawner pieceSpawner;
+    private bool gameOver = false;
 
     public PieceColor CurrentTurn { get; private set; } = PieceColor.White;
     public Piece SelectedPiece { get; private set; }
@@ -23,12 +28,16 @@ public class ChessGameManager : MonoBehaviour
         Instance = this;
     }
 
-    private void Start() => InitializeGame();
-
     public void InitializeGame()
     {
         boardCreator.InitializeTiles();
         pieceSpawner.SpawnPieces();
+    }
+
+    public void InitializeGame(string FEN)
+    {
+        boardCreator.InitializeTiles();
+        pieceSpawner.SpawnPieces(FEN);
     }
 
     public void SelectPiece(Piece piece)
@@ -64,52 +73,141 @@ public class ChessGameManager : MonoBehaviour
         TryMakeMove(tile);
     }
 
+    public void MakeMoveSimulated(Move move)
+    {
+        move.CapturedPiece = move.TargetTile.CurrentPiece;
+        move.SourceTile = move.Piece.CurrentTile;
+
+        move.TargetTile.CurrentPiece = move.Piece;
+        move.SourceTile.CurrentPiece = null;
+
+        move.Piece.Data.BoardPosition = move.TargetTile.BoardPosition;
+    }
+
+    public void UndoMoveSimulated(Move move)
+    {
+        move.TargetTile.CurrentPiece = move.CapturedPiece;
+        move.SourceTile.CurrentPiece = move.Piece;
+
+        move.Piece.Data.BoardPosition = move.SourceTile.BoardPosition;
+    }
+
+    public bool IsGameOver()
+    {
+        return !HasLegalMoves(CurrentTurn);
+    }
+
     public void TryMakeMove(Tile targetTile)
     {
         if (SelectedPiece == null) return;
 
         if (IsValidMove(SelectedPiece, targetTile))
         {
+            Debug.Log("Move is valid");
             MakeMove(SelectedPiece, targetTile);
         }
         else
         {
+            Debug.Log("Invalid move");
             SelectedPiece.ResetPosition();
         }
         DeselectPiece();
     }
 
-    public Vector2Int? EnPassantTarget { get; private set; }
-
-    private void MakeMove(Piece piece, Tile targetTile)
+    public void MakeMove(Piece piece, Tile targetTile)
     {
-        // Удаление фигуры противника
+        int direction = piece.Data.Color == PieceColor.White ? -1 : 1;
+
+        // EnPassant
+        if (piece.Data.Type == PieceType.Pawn &&
+            targetTile.CurrentPiece == null &&
+            EnPassantTarget.HasValue &&
+            targetTile.BoardPosition == (new Vector2Int(EnPassantTarget.Value.x, EnPassantTarget.Value.y + direction * -1)))
+        {
+            Vector2Int capturedPawnPos = new Vector2Int(targetTile.BoardPosition.x, targetTile.BoardPosition.y + direction);
+            Tile capturedTile = boardCreator.Tiles[capturedPawnPos.x, capturedPawnPos.y];
+
+            if (capturedTile.CurrentPiece != null)
+            {
+                Destroy(capturedTile.CurrentPiece.gameObject);
+                capturedTile.CurrentPiece = null;
+            }
+        }
+
+        // Regular capture
         if (targetTile.CurrentPiece != null)
         {
             Destroy(targetTile.CurrentPiece.gameObject);
+            targetTile.CurrentPiece = null;
         }
 
-        // Перемещение без рекурсии
+        if (piece.Data.Type == PieceType.King &&
+            Mathf.Abs(targetTile.BoardPosition.x - piece.Data.BoardPosition.x) == 2)
+        {
+            direction = (targetTile.BoardPosition.x - piece.Data.BoardPosition.x) > 0 ? 1 : -1;
+            int rookStartX = direction > 0 ? 7 : 0;
+            int rookTargetX = direction > 0 ? 5 : 3;
+
+            Tile rookStartTile = boardCreator.Tiles[rookStartX, piece.Data.BoardPosition.y];
+            Tile rookTargetTile = boardCreator.Tiles[rookTargetX, piece.Data.BoardPosition.y];
+
+            Piece rook = rookStartTile.CurrentPiece;
+            if (rook != null && rook.Data.Type == PieceType.Rook)
+            {
+                rook.MoveTo(rookTargetTile);
+            }
+        }
+
+        // Update EnPassant position
+        if (piece.Data.Type == PieceType.Pawn)
+        {
+            int deltaY = Mathf.Abs(piece.CurrentTile.BoardPosition.y - targetTile.BoardPosition.y);
+            if (deltaY == 2)
+            {
+                EnPassantTarget = targetTile.BoardPosition;
+            }
+            else
+            {
+                EnPassantTarget = null;
+            }
+        }
+        else
+        {
+            EnPassantTarget = null;
+        }
+
         piece.CurrentTile.CurrentPiece = null;
-        piece.MoveTo(targetTile);  // MoveTo не должен вызывать TryMakeMove
+        piece.MoveTo(targetTile);
         targetTile.CurrentPiece = piece;
 
-        // Смена хода
+        CheckGameState();
+
+        // Change turn
         CurrentTurn = CurrentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+
+        // Make ai move
+        if (CurrentTurn == PieceColor.Black)
+        {
+            ai.RequestAIMove();
+        }
     }
 
     private void CheckGameState()
     {
+        if (gameOver) return;
+
         bool isCheck = IsKingInCheck(CurrentTurn);
         bool hasLegalMoves = HasLegalMoves(CurrentTurn);
 
         if (isCheck && !hasLegalMoves)
         {
-
+            Debug.Log($"Мат! Победил: + " + (CurrentTurn == PieceColor.White ? "Белый" : "Чёрный"));
+            gameOver = true;
         }
         else if (!hasLegalMoves)
         {
             Debug.Log("Пат! Ничья");
+            gameOver = true;
         }
         else if (isCheck)
         {
@@ -119,15 +217,13 @@ public class ChessGameManager : MonoBehaviour
 
     public bool IsKingInCheck(PieceColor color)
     {
-        // Найти короля
         Vector2Int kingPos = FindKingPosition(color);
 
-        // Проверить, атакован ли он
         foreach (var tile in Board.Tiles)
         {
             if (tile.CurrentPiece != null && tile.CurrentPiece.Data.Color != color)
             {
-                var moves = tile.CurrentPiece.GetPossibleMoves();
+                var moves = tile.CurrentPiece.GetPossibleMoves(false);
                 if (moves.Contains(kingPos)) return true;
             }
         }
@@ -177,6 +273,21 @@ public class ChessGameManager : MonoBehaviour
         return false; // Нет допустимых ходов
     }
 
+    public bool IsSquareUnderAttack(Vector2Int position, PieceColor defenderColor)
+    {
+        foreach (var tile in Board.Tiles)
+        {
+            Piece attacker = tile.CurrentPiece;
+            if (attacker != null && attacker.Data.Color != defenderColor)
+            {
+                var attackerMoves = attacker.GetPossibleMoves(false);
+                if (attackerMoves.Contains(position))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     public Vector2Int FindKingPosition(PieceColor color)
     {
         for (int x = 0; x < 8; x++)
@@ -195,20 +306,21 @@ public class ChessGameManager : MonoBehaviour
         return Vector2Int.zero;
     }
 
-    private bool IsValidMove(Piece piece, Tile targetTile)
+    private bool IsValidMove(Piece movingPiece, Tile targetTile)
     {
-        // Базовые проверки
-        if (piece == null || targetTile == null) return false;
-        if (piece.Data.Color != CurrentTurn) return false;
-        if (piece.CurrentTile == targetTile) return false;
+        if (movingPiece == null || targetTile == null) return false;
+        if (movingPiece.Data.Color != CurrentTurn) return false;
+        if (movingPiece.CurrentTile == targetTile) return false;
 
-        // Проверка правил движения
-        var possibleMoves = piece.GetPossibleMoves();
-        if (!possibleMoves.Contains(targetTile.BoardPosition)) return false;
+        var possibleMoves = movingPiece.GetPossibleMoves();
+        if (!possibleMoves.Contains(targetTile.BoardPosition)) 
+        {
+            Debug.Log("No possible moves found");
+            return false; 
+        }
 
-        // Проверка на свои фигуры
         if (targetTile.CurrentPiece != null &&
-            targetTile.CurrentPiece.Data.Color == piece.Data.Color)
+            targetTile.CurrentPiece.Data.Color == movingPiece.Data.Color)
             return false;
 
         return true;

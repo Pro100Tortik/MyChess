@@ -17,12 +17,18 @@ public abstract class PieceMovement : MonoBehaviour
     protected bool IsMoveValid(Vector2Int targetPos)
     {
         if (targetPos.x < 0 || targetPos.x >= 8 || targetPos.y < 0 || targetPos.y >= 8)
+        {
+            Debug.Log("Out of bounds");
             return false;
+        }
 
         Tile targetTile = gameManager.Board.Tiles[targetPos.x, targetPos.y];
         if (targetTile.CurrentPiece != null &&
             targetTile.CurrentPiece.Data.Color == piece.Data.Color)
+        {
+            Debug.Log("Same color");
             return false;
+        }
 
         return true;
     }

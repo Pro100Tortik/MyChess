@@ -1,17 +1,19 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(CanvasGroup))]
 public class Piece : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
 {
     public PieceData Data { get; private set; }
     public Tile CurrentTile { get; set; }
+
     private RectTransform _rectTransform;
     private Canvas _canvas;
     private CanvasGroup _canvasGroup;
-    private Vector2 _startPosition;
     private Transform _originalParent;
+    private Vector2 _startAnchoredPosition;
 
     private void Awake()
     {
@@ -21,35 +23,41 @@ public class Piece : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerU
         _originalParent = transform.parent;
     }
 
-    public void Initialize(PieceData data) => Data = data;
+    public void Initialize(PieceData data)
+    {
+        Data = data;
+        GetComponent<Image>().color = Data.Color == PieceColor.White ? Color.white : Color.black;
+    }
 
-    // Начало перетаскивания
     public void OnPointerDown(PointerEventData eventData)
     {
         if (Data.Color != ChessGameManager.Instance.CurrentTurn) return;
 
-        _startPosition = _rectTransform.anchoredPosition;
-        _canvasGroup.blocksRaycasts = false; // Чтобы видеть клетки под фигурой
-        transform.SetParent(_canvas.transform); // Поднимаем фигуру над всеми UI-элементами
+        _canvasGroup.blocksRaycasts = false;
+
+        transform.SetParent(ChessGameManager.Instance.PieceParent);
+        transform.SetAsLastSibling();
+        _startAnchoredPosition = _rectTransform.anchoredPosition;
+
         ChessGameManager.Instance.SelectPiece(this);
     }
 
-    // Процесс перетаскивания
     public void OnDrag(PointerEventData eventData)
     {
         if (Data.Color != ChessGameManager.Instance.CurrentTurn) return;
         _rectTransform.anchoredPosition += eventData.delta / _canvas.scaleFactor;
     }
 
-    // Завершение перетаскивания
     public void OnPointerUp(PointerEventData eventData)
     {
-        if (Data.Color != ChessGameManager.Instance.CurrentTurn) return;
+        if (Data.Color != ChessGameManager.Instance.CurrentTurn)
+        {
+            Debug.Log("Not your turn");
+            return;
+        }
 
         _canvasGroup.blocksRaycasts = true;
-        transform.SetParent(_originalParent); // Возвращаем фигуру в исходный parent
 
-        // Проверяем, была ли фигура отпущена над клеткой
         List<RaycastResult> results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(eventData, results);
 
@@ -58,20 +66,38 @@ public class Piece : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerU
             if (result.gameObject.TryGetComponent<Tile>(out var tile))
             {
                 ChessGameManager.Instance.TryMakeMove(tile);
+                //// Resets piece position to be inside tile
+                //transform.localPosition = Vector2.zero;
                 return;
             }
         }
 
-        ResetPosition(); // Если не попали на клетку
+        ResetPosition();
     }
 
     public void MoveTo(Tile targetTile)
     {
-        // Убедитесь, что этот метод не вызывает ChessGameManager.Instance.TryMakeMove
+        Data.HasMoved = true;
+
         CurrentTile.CurrentPiece = null;
         CurrentTile = targetTile;
-        targetTile.CurrentPiece = this;
-        _rectTransform.anchoredPosition = targetTile.GetComponent<RectTransform>().anchoredPosition;
+
+        transform.SetParent(ChessGameManager.Instance.PieceParent);
+        transform.SetAsLastSibling();
+
+        RectTransform tileRect = targetTile.GetComponent<RectTransform>();
+        Vector3 worldPos = tileRect.position;
+
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _rectTransform.parent as RectTransform,
+            RectTransformUtility.WorldToScreenPoint(null, worldPos),
+            null,
+            out Vector2 localPos
+        );
+
+        _rectTransform.anchoredPosition = localPos;
+
+        Data.BoardPosition = targetTile.BoardPosition;
     }
 
     public void SetCurrentTile(Tile targetTile)
@@ -79,11 +105,11 @@ public class Piece : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerU
         CurrentTile = targetTile;
     }
 
-    public List<Vector2Int> GetPossibleMoves()
+    public List<Vector2Int> GetPossibleMoves(bool checkKingSafety = true)
     {
         var movement = GetComponent<PieceMovement>();
-        return movement?.GetPossibleMoves() ?? new List<Vector2Int>();
+        return movement?.GetPossibleMoves(checkKingSafety) ?? new List<Vector2Int>();
     }
 
-    public void ResetPosition() => _rectTransform.anchoredPosition = _startPosition;
+    public void ResetPosition() => _rectTransform.anchoredPosition = _startAnchoredPosition;
 }

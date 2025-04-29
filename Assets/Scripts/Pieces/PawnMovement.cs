@@ -50,13 +50,24 @@ public class PawnMovement : PieceMovement
 
     private void CheckEnPassant(List<Vector2Int> moves, int x, int y)
     {
-        if (x < 0 || x >= 8) return;
+        if (x < 0 || x >= 8 || y < 0 || y >= 8) return;
 
-        Vector2Int? enPassantTarget = ChessGameManager.Instance.EnPassantTarget;
-        if (enPassantTarget.HasValue && enPassantTarget.Value == new Vector2Int(x, y))
+        Tile adjacentTile = gameManager.Board.Tiles[x, y];
+        Piece adjacentPiece = adjacentTile.CurrentPiece;
+
+        if (adjacentPiece != null &&
+            adjacentPiece.Data.Type == PieceType.Pawn &&
+            adjacentPiece.Data.Color != piece.Data.Color &&
+            ChessGameManager.Instance.EnPassantTarget.HasValue &&
+            ChessGameManager.Instance.EnPassantTarget.Value == new Vector2Int(x, y))
         {
             int direction = piece.Data.Color == PieceColor.White ? 1 : -1;
-            moves.Add(new Vector2Int(x, y + direction));
+            Vector2Int enPassantMove = new Vector2Int(x, y + direction);
+
+            if (IsMoveValid(enPassantMove))
+            {
+                moves.Add(enPassantMove);
+            }
         }
     }
 }

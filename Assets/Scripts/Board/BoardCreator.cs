@@ -7,6 +7,7 @@ public class BoardCreator : MonoBehaviour
 
     [SerializeField] private Transform boardParent;
     [SerializeField] private GridLayoutGroup boardGrid;
+    [SerializeField] private Tile tilePrefab;
 
     [SerializeField] private Color lightColor = new Color(0.65f, 0.65f, 0.65f, 1f);
     [SerializeField] private Color darkColor = new Color(0.35f, 0.35f, 0.35f, 1f);
@@ -16,16 +17,14 @@ public class BoardCreator : MonoBehaviour
     {
         Tiles = new Tile[8, 8];
 
-        Tile[] allTiles = boardParent.GetComponentsInChildren<Tile>();
-
-        foreach (Tile tile in allTiles)
+        for (int y = 0; y < 8; y++)
         {
-            string name = tile.gameObject.name;
-            int x = name[name.Length - 2] - 'A';
-            int y = name[name.Length - 1] - '1';
-
-            tile.Initialize(new Vector2Int(x, y), (x + y) % 2 == 0 ? lightColor : darkColor);
-            Tiles[x, y] = tile;
+            for (int x = 0; x < 8; x++)
+            {
+                Tile tile = Instantiate(tilePrefab, boardParent);
+                tile.Initialize(new Vector2Int(x, y), (x + y) % 2 == 0 ? lightColor : darkColor);
+                Tiles[x, y] = tile;
+            }
         }
     }
 }

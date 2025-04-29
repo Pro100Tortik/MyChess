@@ -39,6 +39,17 @@ public class PieceSpawner : MonoBehaviour
         }
     }
 
+    public void SpawnPieces(string FEN)
+    {
+        ClearPieces();
+        var pieceDataList = FENParser.ParseFEN(FEN);
+
+        foreach (var pieceData in pieceDataList)
+        {
+            SpawnPiece(pieceData);
+        }
+    }
+
     private void SpawnPiece(PieceData data)
     {
         if (!_prefabDict.ContainsKey(data.Type))
